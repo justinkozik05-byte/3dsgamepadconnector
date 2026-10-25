@@ -1,0 +1,36 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (ohne Signierung)
+        run: |
+          PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
+          echo "Projekt: $PROJECT"
+          xcodebuild -list -project "$PROJECT"
+          SCHEME=$(xcodebuild -list -project "$PROJECT" -json | python3 -c "import sys,json; print(json.load(sys.stdin)['project']['schemes'][0])")
+          echo "Scheme: $SCHEME"
+          xcodebuild -project "$PROJECT" -scheme "$SCHEME" \
+            -configuration Release -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            clean build
+
+      - name: IPA packen
+        run: |
+          APP=$(find build/Build/Products -maxdepth 3 -name "*.app" | head -n 1)
+          echo "App: $APP"
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -r app.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipa
+          path: app.ipa
